@@ -19,7 +19,7 @@ import {StakingPoolBase} from './StakingPoolBase.sol';
 contract CommunityStakingPool is StakingPoolBase, IMerkleAccessController, TypeAndVersionInterface {
   /// @notice This error is thrown when the pool is opened with an empty
   /// merkle root
-  error MerkleRootNotSet();
+  error MerkleRootNotSet(); // @audit no use of suitable error names
 
   /// @notice This event is emitted when the operator staking pool
   /// @param oldOperatorStakingPool The old operator staking pool

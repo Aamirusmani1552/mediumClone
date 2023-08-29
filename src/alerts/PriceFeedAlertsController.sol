@@ -514,7 +514,8 @@ contract PriceFeedAlertsController is
     address alerter,
     address feed
   ) private view returns (CanAlertReturnValues memory) {
-    (uint256 roundId,,, uint256 updatedAt,) = AggregatorV3Interface(feed).latestRoundData();
+    (uint256 roundId,,, uint256 updatedAt,) = AggregatorV3Interface(feed).latestRoundData(); // @audit
+      // staleness checks not done properly
     FeedConfig memory feedConfig = s_feedConfigs[feed];
     CanAlertReturnValues memory returnValues =
       CanAlertReturnValues({canAlert: false, roundId: roundId, feedConfig: feedConfig});

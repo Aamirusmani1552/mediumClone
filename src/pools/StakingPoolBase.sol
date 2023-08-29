@@ -499,7 +499,7 @@ abstract contract StakingPoolBase is
     });
     // The return value is not checked since the call will revert if any balance, allowance or
     // receiver conditions fail.
-    i_LINK.transfer(msg.sender, amount);
+    i_LINK.transfer(msg.sender, amount); // @audit return value not checked
 
     emit Unstaked(msg.sender, amount, claimedReward);
   }
