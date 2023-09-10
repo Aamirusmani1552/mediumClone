@@ -8,6 +8,8 @@ abstract contract Migratable is IMigratable {
   address internal s_migrationTarget;
 
   /// @inheritdoc IMigratable
+  // @audit no info is given in the natspac whether if this function is supoosed to be integrated
+  // with the role based model and they should override the `_validateMigrationTarget` function
   function setMigrationTarget(address newMigrationTarget) external virtual override {
     _validateMigrationTarget(newMigrationTarget);
 

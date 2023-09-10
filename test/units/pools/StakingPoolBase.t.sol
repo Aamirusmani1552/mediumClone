@@ -345,3 +345,39 @@ contract StakingPoolBase_OnTokenTransfer is StakingPool_WithStakers {
     s_stakingPoolBaseV2.onTokenTransfer(address(s_communityStakingPool), amount, migrationData);
   }
 }
+
+contract StakingPoolBase_MyTests is BaseTest {
+  function setUp() public override {
+    BaseTest.setUp();
+  }
+
+  // @audit-ok test passes
+  function test_shouldBeAbleToSetOldValuesAgain() public {
+    StakingPoolBaseHarness poolBase = new StakingPoolBaseHarness(
+      StakingPoolBase.ConstructorParamsBase({
+        LINKAddress: s_LINK,
+        initialMaxPoolSize: 31_500_000 ether,
+        initialMaxPrincipalPerStaker: 1000 ether,
+        minPrincipalPerStaker: 10 ether,
+        initialUnbondingPeriod: INITIAL_UNBONDING_PERIOD,
+        maxUnbondingPeriod: MAX_UNBONDING_PERIOD,
+        initialClaimPeriod: INITIAL_CLAIM_PERIOD,
+        minClaimPeriod: MIN_CLAIM_PERIOD,
+          maxClaimPeriod: MAX_CLAIM_PERIOD,
+        adminRoleTransferDelay: ADMIN_ROLE_TRANSFER_DELAY
+      })
+    );
+
+    // setting same unbonding period again should not revert
+    poolBase.setUnbondingPeriod(INITIAL_UNBONDING_PERIOD);
+    // setting same reward valut again should not revert
+    poolBase.setRewardVault(s_rewardVault);
+    poolBase.setRewardVault(s_rewardVault);
+    // setting same claim period should not revert
+    poolBase.setClaimPeriod(INITIAL_CLAIM_PERIOD);
+
+    // same migration proxy can be set again
+    poolBase.setMigrationProxy(address(s_migrationProxy));
+    poolBase.setMigrationProxy(address(s_migrationProxy));
+  }
+}

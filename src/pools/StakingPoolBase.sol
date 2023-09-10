@@ -109,28 +109,30 @@ abstract contract StakingPoolBase is
 
   /// @notice This struct defines the params required by the Staking contract's
   /// constructor.
+
+  // @audit-ok all ok
   struct ConstructorParamsBase {
     /// @notice The LINK Token
-    LinkTokenInterface LINKAddress;
+    LinkTokenInterface LINKAddress; // @audit-ok checked
     /// @notice The initial maximum total stake amount for all stakers in the
     /// pool
-    uint96 initialMaxPoolSize;
+    uint96 initialMaxPoolSize; // @audit-ok uint96 checked
     /// @notice The initial maximum stake amount for a staker
-    uint96 initialMaxPrincipalPerStaker;
+    uint96 initialMaxPrincipalPerStaker; // @audit-ok uint96 checked
     /// @notice The minimum stake amount that a staker must stake
-    uint96 minPrincipalPerStaker;
+    uint96 minPrincipalPerStaker; // @audit-ok uint96 checked
     /// @notice The initial unbonding period
-    uint32 initialUnbondingPeriod;
+    uint32 initialUnbondingPeriod; // @audit-ok
     /// @notice The max value that the unbonding period can be set to
-    uint32 maxUnbondingPeriod;
+    uint32 maxUnbondingPeriod; // @audit-ok checked
     /// @notice The initial claim period
-    uint32 initialClaimPeriod;
+    uint32 initialClaimPeriod; // @audit-ok checked
     /// @notice The min value that the claim period can be set to
-    uint32 minClaimPeriod;
+    uint32 minClaimPeriod; // @audit-ok checked
     /// @notice The max value that the claim period can be set to
-    uint32 maxClaimPeriod;
+    uint32 maxClaimPeriod; // @audit-ok checked
     /// @notice The time it requires to transfer admin role
-    uint48 adminRoleTransferDelay;
+    uint48 adminRoleTransferDelay; // @audit-ok checked
   }
 
   /// @notice This struct defines the params that the pool is configured with
@@ -194,21 +196,28 @@ abstract contract StakingPoolBase is
   /// @notice Flag that signals if the staking pool is open for staking
   bool internal s_isOpen;
 
+  // @audit-info Checked 1 issue found
   constructor(ConstructorParamsBase memory params)
     PausableWithAccessControl(params.adminRoleTransferDelay, msg.sender)
   {
     if (address(params.LINKAddress) == address(0)) revert InvalidZeroAddress();
+    // @audit-info min amount a staker can stake. must be greater than 0
     if (params.minPrincipalPerStaker == 0) revert InvalidMinStakeAmount();
+    // @audit-info maximum amount a staker can stake. min must be less than max
     if (params.minPrincipalPerStaker >= params.initialMaxPrincipalPerStaker) {
       revert InvalidMinStakeAmount();
     }
+    // @audit both  min unbonding period and max unbonding period could be same
     if (MIN_UNBONDING_PERIOD > params.maxUnbondingPeriod) {
       revert InvalidUnbondingPeriodRange(MIN_UNBONDING_PERIOD, params.maxUnbondingPeriod);
     }
+    // @audit-info claim period is the period to claim rewards in after unbounding period
+    // @audit-info should be greater than 0
     if (params.minClaimPeriod == 0 || params.minClaimPeriod >= params.maxClaimPeriod) {
       revert InvalidClaimPeriodRange(params.minClaimPeriod, params.maxClaimPeriod);
     }
 
+    // @audit can be a malicius token
     i_LINK = params.LINKAddress;
     i_minPrincipalPerStaker = params.minPrincipalPerStaker;
 
@@ -227,6 +236,7 @@ abstract contract StakingPoolBase is
   /// @dev precondition This contract must be closed and upgraded to a new pool.
   /// @dev precondition The migration target must be set.
   /// @dev precondition The caller must be staked in the pool.
+  // @audit-ok seems all ok for now
   function migrate(bytes calldata data)
     external
     override(IMigratable)
@@ -255,6 +265,8 @@ abstract contract StakingPoolBase is
   /// @inheritdoc Migratable
   /// @dev precondition The caller must have the default admin role.
   /// @dev precondition The migration target must implement the IMigrationDataReceiver interface.
+
+  // @audit-ok No issues found
   function _validateMigrationTarget(address newMigrationTarget)
     internal
     override(Migratable)
@@ -274,6 +286,7 @@ abstract contract StakingPoolBase is
   /// their staked LINK during the claim period that follows the unbonding period.
   /// @dev precondition The caller must be staked in the pool.
   /// @dev precondition The caller must not be in an unbonding period.
+
   function unbond() external {
     Staker storage staker = s_stakers[msg.sender];
     uint224 history = staker.history.latest();
@@ -292,6 +305,8 @@ abstract contract StakingPoolBase is
   /// already unbonding will not be affected.
   /// @param newUnbondingPeriod The new unbonding period
   /// @dev precondition The caller must have the default admin role.
+
+  // @audit Same unbonding period can be set again
   function setUnbondingPeriod(uint256 newUnbondingPeriod) external onlyRole(DEFAULT_ADMIN_ROLE) {
     _setUnbondingPeriod(newUnbondingPeriod);
   }
@@ -299,12 +314,14 @@ abstract contract StakingPoolBase is
   /// @notice Returns the unbonding period limits
   /// @return uint256 The min value that the unbonding period can be set to
   /// @return uint256 The max value that the unbonding period can be set to
+  // @audit-ok
   function getUnbondingPeriodLimits() external view returns (uint256, uint256) {
     return (MIN_UNBONDING_PERIOD, i_maxUnbondingPeriod);
   }
 
   /// @notice Set the claim period
   /// @param claimPeriod The claim period
+  // @audit Same claim period can be set again
   function setClaimPeriod(uint256 claimPeriod) external onlyRole(DEFAULT_ADMIN_ROLE) {
     _setClaimPeriod(claimPeriod);
   }
@@ -312,6 +329,7 @@ abstract contract StakingPoolBase is
   /// @notice Sets the new reward vault for the pool
   /// @param newRewardVault The new reward vault
   /// @dev precondition The caller must have the default admin role.
+  // @audit Same reward vault can be set again
   function setRewardVault(IRewardVault newRewardVault) external onlyRole(DEFAULT_ADMIN_ROLE) {
     if (address(newRewardVault) == address(0)) revert InvalidZeroAddress();
     address oldRewardVault = address(s_rewardVault);
@@ -329,6 +347,8 @@ abstract contract StakingPoolBase is
   /// @dev precondition The migration proxy must be set.
   /// @dev precondition This contract must be open and not paused.
   /// @dev precondition The reward vault must be open and not paused.
+
+  // @audit-ok seems ok for now
   function onTokenTransfer(
     address sender,
     uint256 amount,
@@ -348,6 +368,8 @@ abstract contract StakingPoolBase is
     address staker = sender == s_migrationProxy ? _getStakerAddress(data) : sender;
     if (staker == address(0)) revert InvalidZeroAddress();
 
+    // @audit-info these checks will not be done on pool base as function body is not present. needs
+    // to be done on the communitystaking pool and operator staking pool
     // includes access check for non migration proxy
     _validateOnTokenTransfer(sender, staker, data);
 
@@ -356,6 +378,7 @@ abstract contract StakingPoolBase is
     uint256 stakerPrincipal = uint256(history >> 112);
     uint256 stakedAt = uint112(history);
 
+    // @audit-info set the stakers bonding period and claim period to 0 when he stake
     if (stakerState.unbondingPeriodEndsAt != 0) {
       delete stakerState.unbondingPeriodEndsAt;
       delete stakerState.claimPeriodEndsAt;
@@ -387,6 +410,8 @@ abstract contract StakingPoolBase is
   /// @notice Returns the minimum and maximum claim periods that can be set by the owner
   /// @return uint256 minimum claim period
   /// @return uint256 maximum claim period
+
+  // @audit-ok all ok
   function getClaimPeriodLimits() external view returns (uint256, uint256) {
     return (i_minClaimPeriod, i_maxClaimPeriod);
   }
@@ -397,6 +422,8 @@ abstract contract StakingPoolBase is
 
   /// @inheritdoc IStakingOwner
   /// @dev precondition The caller must have the default admin role.
+
+  // @audit-ok there could be only one issue if the maxpoolsize is set to max maxPrinciplePerStaker
   function setPoolConfig(
     uint256 maxPoolSize,
     uint256 maxPrincipalPerStaker
@@ -406,6 +433,8 @@ abstract contract StakingPoolBase is
 
   /// @inheritdoc IStakingOwner
   /// @dev precondition The caller must have the default admin role.
+
+  // @audit correct Check Effect Interaction pattern not followed
   function open()
     external
     override(IStakingOwner)
@@ -422,6 +451,7 @@ abstract contract StakingPoolBase is
 
   /// @inheritdoc IStakingOwner
   /// @dev precondition The caller must have the default admin role.
+  // @audit-info would be able to check better in other pools
   function close() external override(IStakingOwner) onlyRole(DEFAULT_ADMIN_ROLE) whenOpen {
     s_isOpen = false;
     s_pool.state.closedAt = block.timestamp;
@@ -433,12 +463,14 @@ abstract contract StakingPoolBase is
 
   /// @inheritdoc IStakingOwner
   /// @dev precondition The caller must have the default admin role.
+  // @audit can be set again
+  // @audit can also cause the risk of owners centeralization and theft of tokens
   function setMigrationProxy(address migrationProxy) external override onlyRole(DEFAULT_ADMIN_ROLE) {
     if (migrationProxy == address(0)) revert InvalidZeroAddress();
 
     s_migrationProxy = migrationProxy;
 
-    emit MigrationProxySet(migrationProxy);
+    emit MigrationProxySet(migrationProxy); // @audit no old migrationProxy address in the event
   }
 
   // =================
@@ -456,6 +488,8 @@ abstract contract StakingPoolBase is
   /// a timelock period that is longer than the unbonding period, which will
   /// provide stakers sufficient time to withdraw their staked LINK from the
   /// pool before a malicious reward vault is set.
+
+  // @audit should accept timelock of the Timelock as it could be set to less than the unbonding period
   function unstake(uint256 amount, bool shouldClaimReward) external override {
     Staker storage staker = s_stakers[msg.sender];
     if (!_canUnstake(staker)) {
@@ -499,7 +533,7 @@ abstract contract StakingPoolBase is
     });
     // The return value is not checked since the call will revert if any balance, allowance or
     // receiver conditions fail.
-    i_LINK.transfer(msg.sender, amount); // @audit return value not checked
+    i_LINK.transfer(msg.sender, amount);
 
     emit Unstaked(msg.sender, amount, claimedReward);
   }
@@ -619,6 +653,9 @@ abstract contract StakingPoolBase is
   /// @param maxPoolSize The max amount of staked LINK allowed in the pool
   /// @param maxPrincipalPerStaker The max amount of LINK a staker can stake
   /// in the pool.
+
+  // @audit-ok no serious issues found
+
   function _setPoolConfig(uint256 maxPoolSize, uint256 maxPrincipalPerStaker) internal {
     PoolConfigs storage configs = s_pool.configs;
     // only allow increasing the maxPoolSize
@@ -633,11 +670,12 @@ abstract contract StakingPoolBase is
 
     if (configs.maxPoolSize != maxPoolSize) {
       configs.maxPoolSize = maxPoolSize.toUint96();
-      emit PoolSizeIncreased(maxPoolSize);
+      emit PoolSizeIncreased(maxPoolSize); // @audit old max pool size not emitted
     }
     if (configs.maxPrincipalPerStaker != maxPrincipalPerStaker) {
       configs.maxPrincipalPerStaker = maxPrincipalPerStaker.toUint96();
-      emit MaxPrincipalAmountIncreased(maxPrincipalPerStaker);
+      emit MaxPrincipalAmountIncreased(maxPrincipalPerStaker); // @audit old max principal not
+        // emitted
     }
   }
 
@@ -648,6 +686,7 @@ abstract contract StakingPoolBase is
       revert InvalidUnbondingPeriod();
     }
 
+    // @audit same unbonding period can be set again. Wastage of gas
     uint256 oldUnbondingPeriod = s_pool.configs.unbondingPeriod;
     s_pool.configs.unbondingPeriod = unbondingPeriod.toUint32();
     emit UnbondingPeriodSet(oldUnbondingPeriod, unbondingPeriod);
@@ -669,6 +708,8 @@ abstract contract StakingPoolBase is
   /// @param sender The staker address
   /// @param newPrincipal The staker's staked LINK amount after staking
   /// @param amount The amount to stake
+
+  // @audit-ok no serious issues found
   function _increaseStake(address sender, uint256 newPrincipal, uint256 amount) internal {
     Staker storage staker = s_stakers[sender];
 
@@ -694,7 +735,7 @@ abstract contract StakingPoolBase is
       latestStakedAtTime: block.timestamp
     });
 
-    emit Staked(sender, newPrincipal, newTotalPrincipal);
+    emit Staked(sender, newPrincipal, newTotalPrincipal); // @audit old values not emmitted
   }
 
   /// @notice Gets the staker address from the data passed by the MigrationProxy contract

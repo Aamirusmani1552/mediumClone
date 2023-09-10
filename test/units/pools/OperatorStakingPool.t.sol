@@ -3726,3 +3726,25 @@ contract OperatorStakingPool_isActive is StakingPool_WithStakers {
     assertEq(s_operatorStakingPool.isActive(), false);
   }
 }
+
+contract MyOSPTests is BaseTest {
+  // @audit-ok Test passed
+  function test_AddressZeroCanBeAddedAsOperator() public {
+    address operator1 = address(1);
+
+    address[] memory operators = new address[](2);
+    operators[0] = address(0);
+    operators[1] = operator1;
+
+    s_operatorStakingPool.addOperators(operators);
+
+    assertEq(s_operatorStakingPool.isOperator(address(0)), true);
+  }
+
+  function test_anyoneCanSetThemselvesAsPauserRole() public {
+    bytes32 PAUSER_ROLE = keccak256('PAUSER_ROLE');
+    // staker taking the pauser role
+    // changePrank(OPERATOR_STAKER_ONE);
+    s_operatorStakingPool.grantRole(PAUSER_ROLE, address(COMMUNITY_STAKER_ONE));
+  }
+}

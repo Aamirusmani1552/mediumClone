@@ -5,6 +5,7 @@ import {LinkTokenInterface} from '@chainlink/contracts/src/v0.8/interfaces/LinkT
 import {SafeCast} from '@openzeppelin/contracts/utils/math/SafeCast.sol';
 import {FixedPointMathLib} from '@solmate/utils/FixedPointMathLib.sol';
 import {BaseTest} from '../../BaseTest.t.sol';
+import {AttackCommunityStakingPool} from "../../AttackCommunityStakingPool.sol";
 import {
   StakingPool_MigrationsOnly,
   StakingPool_WithStakers,
@@ -408,6 +409,26 @@ contract CommunityStakingPool_Constructor is IStakingPool_Constructor, BaseTest 
   function test_InitializesRoles() public {
     assertEq(
       s_communityStakingPool.hasRole(s_communityStakingPool.DEFAULT_ADMIN_ROLE(), OWNER), true
+    );
+  }
+
+  function test_MaxPrincipalPerStakerCanBeEqualToMaxPoolSize() public {
+    new CommunityStakingPool(
+      CommunityStakingPool.ConstructorParams({
+        operatorStakingPool: s_operatorStakingPool,
+        baseParams: StakingPoolBase.ConstructorParamsBase({
+          LINKAddress: LinkTokenInterface(s_LINK),
+          initialMaxPoolSize: COMMUNITY_MAX_POOL_SIZE,
+          initialMaxPrincipalPerStaker: COMMUNITY_MAX_POOL_SIZE,
+          minPrincipalPerStaker: COMMUNITY_MIN_PRINCIPAL,
+          initialUnbondingPeriod: INITIAL_UNBONDING_PERIOD,
+          maxUnbondingPeriod: MAX_UNBONDING_PERIOD,
+          initialClaimPeriod: INITIAL_CLAIM_PERIOD,
+          minClaimPeriod: MIN_CLAIM_PERIOD,
+          maxClaimPeriod: MAX_CLAIM_PERIOD,
+          adminRoleTransferDelay: ADMIN_ROLE_TRANSFER_DELAY
+        })
+      })
     );
   }
 }
@@ -919,6 +940,7 @@ contract CommunityStakingPool_Unbond_WhenStakeIsUnbonding is
   }
 }
 
+// @audit intersting
 contract CommunityStakingPool_Unbond_WhenClaimPeriodEndsAt is StakingPool_WhenClaimPeriodEndsAt {
   function test_RevertWhen_StakerIsAtClaimPeriodEndsAt() public {
     changePrank(COMMUNITY_STAKER_ONE);
@@ -932,6 +954,7 @@ contract CommunityStakingPool_Unbond_WhenClaimPeriodEndsAt is StakingPool_WhenCl
   }
 }
 
+// @audit interesting
 contract CommunityStakingPool_Unbond_WhenStakerStakesAgainDuringUnbondingPeriod is
   IStakingPool_Unbond_WhenStakerStakesAgainDuringUnbondingPeriod,
   StakingPool_StakeInUnbondingPeriod
@@ -1016,6 +1039,7 @@ contract CommunityStakingPool_OnTokenTransfer_WhenPaused is
     );
   }
 
+  // @audit-info cannot stake or migrate when paused
   function test_RevertWhen_AttemptingToMigrateWhenPaused() public {
     changePrank(MOCK_STAKING_V01);
 
@@ -1169,6 +1193,7 @@ contract CommunityStakingPool_OnTokenTransfer_WhenPoolOpen is
     assertEq(s_communityStakingPool.getStakerStakedAtTime(COMMUNITY_STAKER_ONE), block.timestamp);
   }
 
+  // @audit can stake with zero amounts
   function test_StakingZeroAmountHasNoStateChanges() public {
     changePrank(COMMUNITY_STAKER_ONE);
 
@@ -1196,6 +1221,7 @@ contract CommunityStakingPool_OnTokenTransfer_WhenPoolOpen is
     assertEq(s_communityStakingPool.getStakerStakedAtTime(COMMUNITY_STAKER_ONE), stakedAtTimeBefore);
   }
 
+  // @audit-info check for unecessary state update
   function test_StakingWithNoTimePassedSinceAvgStakingDoesNotUpdateAvgStakingTime() public {
     changePrank(COMMUNITY_STAKER_ONE);
 
@@ -1390,9 +1416,22 @@ contract CommunityStakingPool_OnTokenTransfer_WhenThereAreOtherStakers is
       abi.encode(s_communityStakerOneProof)
     );
 
+    s_currentCheckpointId = s_currentCheckpointId - 1;
     assertEq(
-      s_communityStakingPool.getStakerPrincipalAt(COMMUNITY_STAKER_ONE, s_currentCheckpointId - 1),
+      s_communityStakingPool.getStakerPrincipalAt(COMMUNITY_STAKER_ONE, s_currentCheckpointId),
       COMMUNITY_MIN_PRINCIPAL
+    );
+    s_currentCheckpointId++;
+
+    s_LINK.transferAndCall(
+      address(s_communityStakingPool),
+      COMMUNITY_MIN_PRINCIPAL,
+      abi.encode(s_communityStakerOneProof)
+    );
+
+    assertEq(
+      s_communityStakingPool.getStakerPrincipalAt(COMMUNITY_STAKER_ONE, s_currentCheckpointId),
+      2 * COMMUNITY_MIN_PRINCIPAL
     );
   }
 
@@ -1412,6 +1451,8 @@ contract CommunityStakingPool_OnTokenTransfer_WhenThereAreOtherStakers is
       stakedAtTimeBefore
     );
   }
+
+  // @audit transfering the tokens without the transfer will affect the total rewards
 
   function test_StakingUpdatesTheLatestBalance() public {
     changePrank(COMMUNITY_STAKER_ONE);
@@ -1687,6 +1728,7 @@ contract CommunityStakingPool_Unstake is
     s_communityStakingPool.unstake(COMMUNITY_MIN_PRINCIPAL, false);
   }
 
+  // @audit-info can multiple unstake in claim period
   function test_AllowsMultipleUnstakesInClaimPeriod() public {
     uint256 initialPrincipal = s_communityStakingPool.getStakerPrincipal(COMMUNITY_STAKER_TWO);
     changePrank(COMMUNITY_STAKER_TWO);
@@ -1747,6 +1789,7 @@ contract CommunityStakingPool_Unstake is
   }
 }
 
+// @audit-info Still needs to check
 contract CommunityStakingPool_Unstake_WhenThereAreMoreThanTwoStakers is
   StakingPool_InClaimPeriod,
   IStakingPool_Unstake_WhenMoreThanTwoStakers
@@ -1995,6 +2038,7 @@ contract CommunityStakingPool_Unstake_WhenThereAreMoreThanTwoStakers is
   }
 }
 
+// @audit-info Still needs to check
 contract CommunityStakingPool_Unstake_WhenPoolIsFull is
   IStakingPool_Unstake_WhenPoolIsFull,
   StakingPool_InClaimPeriod
@@ -2177,6 +2221,7 @@ contract CommunityStakingPool_Unstake_WhenClaimPeriodFinished is
   }
 }
 
+// @audit still needs to check
 contract CommunityStakingPool_Unstake_WhenLastStakerUnstakesAndClaims is
   IStakingPool_Unstake_WhenLastStakerUnstakesAndClaims,
   StakingPool_InClaimPeriod
@@ -2391,6 +2436,7 @@ contract CommunityStakingPool_SetUnbondingPeriod_WhenPoolOpenedAndStakersAreUnbo
   }
 }
 
+// @audit-info still needs to check
 contract CommunityStakingPool_AccessControlDefaultAdminRules is
   IAccessControlDefaultAdminRulesTest,
   BaseTest
@@ -2703,6 +2749,7 @@ contract CommunityStakingPool_SetClaimPeriod is
   }
 }
 
+// @audit-info still needs to check
 contract CommunityStakingPool_isActive is StakingPool_WithStakers {
   function test_IsActiveWhenPoolIsOpenAndEmittingRewards() public {
     assertEq(s_communityStakingPool.isOpen(), true);
@@ -2731,4 +2778,162 @@ contract CommunityStakingPool_isActive is StakingPool_WithStakers {
     s_communityStakingPool.close();
     assertEq(s_communityStakingPool.isActive(), false);
   }
+}
+
+contract CommunityStakingPool_MyTests is StakingPool_WithStakers {
+  uint256 internal constant NEW_MAX_POOL_SIZE = 40_000_000 ether;
+  uint256 internal constant NEW_MAX_PRINCIPAL = 80_000 ether;
+
+  function setUp() public override {
+    StakingPool_WithStakers.setUp();
+
+    changePrank(OWNER);
+  }
+
+  function test_NewValuesForTheVariablesCanBeSetAgain() public {
+    CommunityStakingPool CSPool = new CommunityStakingPool(
+      CommunityStakingPool.ConstructorParams({
+        operatorStakingPool: s_operatorStakingPool,
+        baseParams: StakingPoolBase.ConstructorParamsBase({
+          LINKAddress: s_LINK,
+          initialMaxPoolSize: COMMUNITY_MAX_POOL_SIZE,
+          initialMaxPrincipalPerStaker: COMMUNITY_MAX_PRINCIPAL,
+          minPrincipalPerStaker: COMMUNITY_MIN_PRINCIPAL,
+          initialUnbondingPeriod: INITIAL_UNBONDING_PERIOD,
+          maxUnbondingPeriod: MAX_UNBONDING_PERIOD,
+          initialClaimPeriod: INITIAL_CLAIM_PERIOD,
+          minClaimPeriod: MIN_CLAIM_PERIOD,
+          maxClaimPeriod: MAX_CLAIM_PERIOD,
+          adminRoleTransferDelay: ADMIN_ROLE_TRANSFER_DELAY
+        })
+      })
+    );
+
+    CSPool.setOperatorStakingPool(s_operatorStakingPool);
+  }
+
+  function test_Check() public {
+    CommunityStakingPool CSPool = new CommunityStakingPool(
+      CommunityStakingPool.ConstructorParams({
+        operatorStakingPool: s_operatorStakingPool,
+        baseParams: StakingPoolBase.ConstructorParamsBase({
+          LINKAddress: s_LINK,
+          initialMaxPoolSize: COMMUNITY_MAX_POOL_SIZE,
+          initialMaxPrincipalPerStaker: COMMUNITY_MAX_PRINCIPAL,
+          minPrincipalPerStaker: COMMUNITY_MIN_PRINCIPAL,
+          initialUnbondingPeriod: INITIAL_UNBONDING_PERIOD,
+          maxUnbondingPeriod: MAX_UNBONDING_PERIOD,
+          initialClaimPeriod: INITIAL_CLAIM_PERIOD,
+          minClaimPeriod: MIN_CLAIM_PERIOD,
+          maxClaimPeriod: MAX_CLAIM_PERIOD,
+          adminRoleTransferDelay: ADMIN_ROLE_TRANSFER_DELAY
+        })
+      })
+    );
+
+    // set migrationProxy, ReawardVault and MerkleRoot, Before opening pool
+    CSPool.setMigrationProxy(address(s_migrationProxy));
+    CSPool.setRewardVault(s_rewardVault);
+    CSPool.setMerkleRoot(bytes32(MERKLE_ROOT));
+    CSPool.open();
+
+    // assuming the pool is public now
+    changePrank(OPERATOR_STAKER_ONE);
+    s_LINK.transferAndCall(address(CSPool), 10 * 10 ** 18, abi.encode(OPERATOR_STAKER_ONE));
+
+    CSPool.close();
+  }
+
+  // @audit passed the test
+
+  function testFail_RemovedOperatorFromOpertorStakingPoolCannotStakeInCommunityStakingPool() public {
+    OperatorStakingPool OSPool = new OperatorStakingPool(
+          OperatorStakingPool.ConstructorParams({
+            // setting it low for the sake of test
+            minInitialOperatorCount: 1,
+            baseParams: StakingPoolBase.ConstructorParamsBase({
+              LINKAddress: s_LINK,
+              initialMaxPoolSize: OPERATOR_MAX_POOL_SIZE,
+              initialMaxPrincipalPerStaker: OPERATOR_MAX_PRINCIPAL,
+              minPrincipalPerStaker: OPERATOR_MIN_PRINCIPAL,
+              initialUnbondingPeriod: INITIAL_UNBONDING_PERIOD,
+              maxUnbondingPeriod: MAX_UNBONDING_PERIOD,
+              initialClaimPeriod: INITIAL_CLAIM_PERIOD,
+              minClaimPeriod: MIN_CLAIM_PERIOD,
+              maxClaimPeriod: MAX_CLAIM_PERIOD,
+              adminRoleTransferDelay: ADMIN_ROLE_TRANSFER_DELAY
+            })
+          })
+        );
+
+    // deploying our community staking pool
+    CommunityStakingPool CSPool = new CommunityStakingPool(
+          CommunityStakingPool.ConstructorParams({
+            operatorStakingPool: OSPool,
+            baseParams: StakingPoolBase.ConstructorParamsBase({
+              LINKAddress: s_LINK,
+              initialMaxPoolSize: COMMUNITY_MAX_POOL_SIZE,
+              initialMaxPrincipalPerStaker: COMMUNITY_MAX_PRINCIPAL,
+              minPrincipalPerStaker: COMMUNITY_MIN_PRINCIPAL,
+              initialUnbondingPeriod: INITIAL_UNBONDING_PERIOD,
+              maxUnbondingPeriod: MAX_UNBONDING_PERIOD,
+              initialClaimPeriod: INITIAL_CLAIM_PERIOD,
+              minClaimPeriod: MIN_CLAIM_PERIOD,
+              maxClaimPeriod: MAX_CLAIM_PERIOD,
+              adminRoleTransferDelay: ADMIN_ROLE_TRANSFER_DELAY
+            })
+          })
+        );
+
+    RewardVault RVault = new RewardVault(
+          RewardVault.ConstructorParams({
+            linkToken: s_LINK,
+            communityStakingPool: CSPool,
+            operatorStakingPool: OSPool,
+            delegationRateDenominator: DELEGATION_RATE_DENOMINATOR,
+            initialMultiplierDuration: INITIAL_MULTIPLIER_DURATION,
+            adminRoleTransferDelay: ADMIN_ROLE_TRANSFER_DELAY
+          })
+        );
+
+    //set migrationProxy, ReawardVault and MerkleRoot, Before opening pools
+    OSPool.setMigrationProxy(address(s_migrationProxy));
+    CSPool.setMigrationProxy(address(s_migrationProxy));
+
+    CSPool.setRewardVault(RVault);
+    OSPool.setRewardVault(RVault);
+
+    // setting merkle root so that pool can be opened
+    CSPool.setMerkleRoot(bytes32(MERKLE_ROOT));
+
+    // setting operators
+    address[] memory operators = new address[](1);
+    operators[0] = OPERATOR_STAKER_ONE;
+
+    // adding opertor in the pool
+    OSPool.addOperators(operators);
+    assertEq(OSPool.isOperator(OPERATOR_STAKER_ONE), true);
+    assertEq(OSPool.isRemoved(OPERATOR_STAKER_ONE), false);
+
+    // opening pools
+    CSPool.open();
+    // should be open only after meeting minimum staker count
+    OSPool.open();
+
+    // removing operators from the Operator staking pool
+    OSPool.removeOperators(operators);
+    assertEq(OSPool.isOperator(OPERATOR_STAKER_ONE), false);
+    assertEq(OSPool.isRemoved(OPERATOR_STAKER_ONE), true);
+
+    // setting empty merkle root so that pool can go in public access
+    CSPool.setMerkleRoot(bytes32(''));
+
+    // staking in the communityStaking pool
+    changePrank(OPERATOR_STAKER_ONE);
+    s_LINK.transferAndCall(
+      address(CSPool), s_LINK.balanceOf(OPERATOR_STAKER_ONE), abi.encode(OPERATOR_STAKER_ONE)
+    );
+  }
+
+
 }

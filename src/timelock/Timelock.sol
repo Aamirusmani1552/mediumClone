@@ -3,6 +3,7 @@ pragma solidity 0.8.19;
 
 import {AccessControlEnumerable} from '@openzeppelin/contracts/access/AccessControlEnumerable.sol';
 import {EnumerableSet} from '@openzeppelin/contracts/utils/structs/EnumerableSet.sol';
+import {console} from 'forge-std/console.sol';
 
 /**
  * @notice Contract module which acts as a timelocked controller with role-based
@@ -294,6 +295,7 @@ contract Timelock is AccessControlEnumerable {
         largestDelay = selectorDelay;
       }
     }
+    console.log('largest delay for the calls is %s', largestDelay);
     return largestDelay;
   }
 
@@ -353,8 +355,13 @@ contract Timelock is AccessControlEnumerable {
    * @param delay Duration before the operation can be executed.
    * @param calls List of contract calls to include in a batch.
    */
+
+  // @audit chances, different proposers can propose same type of proposal which could make some
+  // process
+  // not work as expected
   function _schedule(bytes32 id, uint256 delay, Call[] calldata calls) private {
     require(!isOperation(id), 'Timelock: operation already scheduled');
+    console.log(delay, getMinDelay(calls));
     require(delay >= getMinDelay(calls), 'Timelock: insufficient delay');
 
     s_timestamps[id] = block.timestamp + delay;

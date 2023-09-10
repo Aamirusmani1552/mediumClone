@@ -2,6 +2,7 @@
 pragma solidity 0.8.19;
 
 import {FixedPointMathLib} from '@solmate/utils/FixedPointMathLib.sol';
+import {console} from 'forge-std/console.sol';
 
 import {BaseTest} from '../../BaseTest.t.sol';
 import {
@@ -298,6 +299,7 @@ contract RewardVault_AddReward_OperatorRewardBucket is
     RewardVault.RewardBuckets memory rewardBuckets = s_rewardVault.getRewardBuckets();
 
     assertEq(rewardBuckets.operatorBase.rewardDurationEndsAt, firstEnding);
+    assertEq(rewardBuckets.operatorBase.emissionRate, EMISSION_RATE);
     assertEq(rewardBuckets.communityBase.rewardDurationEndsAt, 0);
     assertEq(rewardBuckets.operatorDelegated.rewardDurationEndsAt, 0);
 
@@ -306,6 +308,7 @@ contract RewardVault_AddReward_OperatorRewardBucket is
     rewardBuckets = s_rewardVault.getRewardBuckets();
 
     assertEq(rewardBuckets.operatorBase.rewardDurationEndsAt, secondEnding);
+    assertEq(rewardBuckets.operatorBase.emissionRate, EMISSION_RATE);
     assertEq(rewardBuckets.communityBase.rewardDurationEndsAt, 0);
     assertEq(rewardBuckets.operatorDelegated.rewardDurationEndsAt, 0);
   }
@@ -322,6 +325,7 @@ contract RewardVault_AddReward_OperatorRewardBucket is
     RewardVault.RewardBuckets memory rewardBuckets = s_rewardVault.getRewardBuckets();
 
     assertEq(rewardBuckets.operatorBase.rewardDurationEndsAt, firstEnding);
+    assertEq(rewardBuckets.operatorBase.emissionRate, EMISSION_RATE);
     assertEq(rewardBuckets.communityBase.rewardDurationEndsAt, 0);
     assertEq(rewardBuckets.operatorDelegated.rewardDurationEndsAt, 0);
 
@@ -330,6 +334,7 @@ contract RewardVault_AddReward_OperatorRewardBucket is
     rewardBuckets = s_rewardVault.getRewardBuckets();
 
     assertEq(rewardBuckets.operatorBase.rewardDurationEndsAt, secondEndingWithDelay);
+    assertEq(rewardBuckets.operatorBase.emissionRate, EMISSION_RATE);
     assertEq(rewardBuckets.communityBase.rewardDurationEndsAt, 0);
     assertEq(rewardBuckets.operatorDelegated.rewardDurationEndsAt, 0);
   }
@@ -1096,6 +1101,7 @@ contract RewardVault_AddReward_AllRewardBuckets_WithoutDelegation is
     assertEq(rewardBuckets.operatorBase.emissionRate, expectedOperatorRate * 2);
     assertEq(rewardBuckets.communityBase.emissionRate, expectedCommunityRate * 2);
     assertEq(rewardBuckets.operatorDelegated.emissionRate, 0);
+    assertEq(expectedOperatorRate * 2 + expectedCommunityRate * 2, EMISSION_RATE * 2);
   }
 
   function test_IncreaseRewardDurationWithMoreRewardsSameRate() public {
@@ -1296,6 +1302,8 @@ contract RewardVault_AddReward_AllRewardBuckets_RoundingTowardsZero_WithDelegati
       rewardAmount * maxOperatorPoolSize / DECIMALS * DECIMALS
         >= maxCommunityPoolSize + maxOperatorPoolSize
     );
+
+    console.log('we are here');
 
     changePrank(OWNER);
     s_communityStakingPool.setPoolConfig(maxCommunityPoolSize, INITIAL_MAX_PRINCIPAL_PER_STAKER);

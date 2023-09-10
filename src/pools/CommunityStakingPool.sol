@@ -32,8 +32,11 @@ contract CommunityStakingPool is StakingPoolBase, IMerkleAccessController, TypeA
   /// constructor.
   struct ConstructorParams {
     /// @notice The base staking pool constructor parameters
+
+    // @audit-ok these parameters are validated to be correct in the constructor of Pool base
     ConstructorParamsBase baseParams;
     /// @notice The operator staking pool contract
+    // @audit-ok this is checked over here
     OperatorStakingPool operatorStakingPool;
   }
 
@@ -43,6 +46,7 @@ contract CommunityStakingPool is StakingPoolBase, IMerkleAccessController, TypeA
   /// of staker addresses with early acccess.
   bytes32 private s_merkleRoot;
 
+  // @audit operatorStakingPool can be set to an attackContract
   constructor(ConstructorParams memory params) StakingPoolBase(params.baseParams) {
     if (address(params.operatorStakingPool) == address(0)) {
       revert InvalidZeroAddress();
@@ -56,6 +60,7 @@ contract CommunityStakingPool is StakingPoolBase, IMerkleAccessController, TypeA
   // ===============
 
   /// @inheritdoc StakingPoolBase
+  // @audit-ok seems ok for now
   function _validateOnTokenTransfer(
     address sender,
     address staker,
@@ -75,13 +80,15 @@ contract CommunityStakingPool is StakingPoolBase, IMerkleAccessController, TypeA
       revert AccessForbidden();
     }
 
-    // check if the sender is an operator
+    // @audit-ok expected behavior
     if (s_operatorStakingPool.isOperator(staker) || s_operatorStakingPool.isRemoved(staker)) {
       revert AccessForbidden();
     }
   }
 
   /// @inheritdoc StakingPoolBase
+
+  // @audit-ok checked
   function _handleOpen() internal view override(StakingPoolBase) {
     if (s_merkleRoot == bytes32(0)) {
       revert MerkleRootNotSet();
@@ -93,6 +100,7 @@ contract CommunityStakingPool is StakingPoolBase, IMerkleAccessController, TypeA
   // =======================
 
   /// @inheritdoc IMerkleAccessController
+  // @audit-ok checked
   function hasAccess(
     address staker,
     bytes32[] calldata proof
@@ -106,7 +114,9 @@ contract CommunityStakingPool is StakingPoolBase, IMerkleAccessController, TypeA
   /// @param proof Merkle proof for the community staker's allowlist
   /// @return bool True if the community staker has access to the access limited
   /// community staking pool
+  // @audit-ok checked
   function _hasAccess(address staker, bytes32[] memory proof) private view returns (bool) {
+    // @audit-info if s_merkleRoot is not set then the pool is open to all
     if (s_merkleRoot == bytes32(0)) return true;
     return MerkleProof.verify({
       proof: proof,
@@ -117,12 +127,14 @@ contract CommunityStakingPool is StakingPoolBase, IMerkleAccessController, TypeA
 
   /// @inheritdoc IMerkleAccessController
   /// @dev precondition The caller must have the default admin role.
+  // @audit old merkle root can be again
   function setMerkleRoot(bytes32 newMerkleRoot) external override onlyRole(DEFAULT_ADMIN_ROLE) {
     s_merkleRoot = newMerkleRoot;
-    emit MerkleRootChanged(newMerkleRoot);
+    emit MerkleRootChanged(newMerkleRoot); // @audit old merkle root not emitted
   }
 
   /// @inheritdoc IMerkleAccessController
+  // @audit-ok chekced
   function getMerkleRoot() external view override returns (bytes32) {
     return s_merkleRoot;
   }
@@ -130,6 +142,8 @@ contract CommunityStakingPool is StakingPoolBase, IMerkleAccessController, TypeA
   /// @notice This function sets the operator staking pool
   /// @param newOperatorStakingPool The new operator staking pool
   /// @dev precondition The caller must have the default admin role.
+
+  // @audit old OperatorStakingPool can be set again
   function setOperatorStakingPool(OperatorStakingPool newOperatorStakingPool)
     external
     onlyRole(DEFAULT_ADMIN_ROLE)
@@ -145,6 +159,7 @@ contract CommunityStakingPool is StakingPoolBase, IMerkleAccessController, TypeA
   // =======================
 
   /// @inheritdoc TypeAndVersionInterface
+  // @audit-ok checked
   function typeAndVersion() external pure virtual override returns (string memory) {
     return 'CommunityStakingPool 1.0.0';
   }

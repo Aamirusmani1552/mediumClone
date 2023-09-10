@@ -106,7 +106,7 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
   /// constructor.
   struct ConstructorParams {
     /// @notice The base staking pool constructor parameters
-    ConstructorParamsBase baseParams;
+    ConstructorParamsBase baseParams; // @audit-ok Checked
     /// @notice The minimum number of node operators required to open the
     /// staking pool.
     uint256 minInitialOperatorCount;
@@ -151,6 +151,7 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
   /// @dev precondition The caller must have at least `amount` LINK tokens.
   /// @dev precondition The caller must have approved this contract for the transfer of at least
   /// `amount` LINK tokens.
+  // @audit-info ain't no way to deposit funds
   function depositAlerterReward(uint256 amount)
     external
     onlyRole(DEFAULT_ADMIN_ROLE)
@@ -170,6 +171,8 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
   /// @dev precondition This contract must have at least `amount` LINK tokens as the alerter reward
   /// funds.
   /// @dev precondition This contract must be closed (before opening or after closing).
+  // @audit-ok aint no way the funds could be withdrawn safely
+
   function withdrawAlerterReward(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
     if (s_isOpen) revert PoolNotClosed();
     if (amount > s_alerterRewardFunds) {
@@ -184,6 +187,8 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
 
   /// @notice Returns the balance of the pool's alerter reward funds
   /// @return uint256 The balance of the pool's alerter reward funds
+
+  // @audit-ok checked
   function getAlerterRewardFunds() external view returns (uint256) {
     return s_alerterRewardFunds;
   }
@@ -201,6 +206,8 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
   /// @dev The slasher role must be granted through `addSlasher`.
   /// @param role The role to grant
   /// @param account The address to grant the role to
+
+  // @audit can be assigned to zero address
   function grantRole(
     bytes32 role,
     address account
@@ -215,6 +222,8 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
 
   /// @inheritdoc ISlashable
   /// @dev precondition The caller must have the default admin role.
+
+  // @audit-ok checked
   function addSlasher(
     address slasher,
     SlasherConfig calldata config
@@ -225,6 +234,8 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
 
   /// @inheritdoc ISlashable
   /// @dev precondition The caller must have the default admin role.
+
+  // @audit address zero checks not done.
   function setSlasherConfig(
     address slasher,
     SlasherConfig calldata config
@@ -259,6 +270,7 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
   }
 
   /// @inheritdoc ISlashable
+  // @audit-ok checked
   function getSlashCapacity(address slasher) external view override returns (uint256) {
     SlasherConfig memory slasherConfig = s_slasherConfigs[slasher];
     return _getRemainingSlashCapacity(slasherConfig, slasher);
@@ -274,6 +286,9 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
   /// @dev precondition The caller must have the slasher role.
   /// @dev precondition This contract must be active (open and stakers are earning rewards).
   /// @dev precondition The slasher must have enough capacity to slash.
+
+  // @audit-ok seems ok for now
+  // @audit lack of natspec
   function slashAndReward(
     address[] calldata stakers,
     address alerter,
@@ -326,6 +341,7 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
       uint256 updatedPrincipal = operatorPrincipal - slashedAmount;
 
       // update the staker's rewards
+      // @audit check for whay
       s_rewardVault.updateReward(operators[i], operatorPrincipal);
       _updateStakerHistory({
         staker: staker,
@@ -347,14 +363,35 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
   /// @param alerter The alerter
   /// @param totalSlashedAmount The total amount slashed from all the operators
   /// @param alerterRewardAmount The amount to reward the alerter
+  // @audit-ok looks ok for now
   function _payAlerter(
     address alerter,
     uint256 totalSlashedAmount,
     uint256 alerterRewardAmount
   ) private {
+    // s_alertRewardFunds = 10 link
+    // totalSlashedAmount = 20 link
+    // newAlerterRewardFuns = 30 link (s_alertRewardFunds + totalSlashedAmount)
+    // Case 1
+    // alerterRewardAmount = 20 link
+    // alerterRewardActual = 20 link
+    // s_alerterRewardFunds = 10 link (newAlerterRewardFunds - alerterRewardActual)
+
+    // Case 2
+    // alerterRewardAmount = 30 link
+    // alerterRewardActual = 30 link
+    // s_alerterRewardFunds = 0 link (newAlerterRewardFunds - alerterRewardActual)
+
+    // Case 3
+    // alerterRewardAmount = 40 link
+    // alerterRewardActual = 30 link
+    // s_alerterRewardFunds = 0 link (newAlerterRewardFunds - alerterRewardActual)
     uint256 newAlerterRewardFunds = s_alerterRewardFunds + totalSlashedAmount;
     uint256 alerterRewardActual =
       newAlerterRewardFunds < alerterRewardAmount ? newAlerterRewardFunds : alerterRewardAmount;
+
+    // @audit-info if the stored alerter rewards are less the actual rewards, the all funds will be
+    // trasnfered
     s_alerterRewardFunds = newAlerterRewardFunds - alerterRewardActual;
 
     // We emit an event here instead of reverting so that the alerter can
@@ -372,6 +409,8 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
   /// @param slasherConfig The slasher's config
   /// @param slasher The slasher
   /// @return The remaining slashing capacity
+
+  // @audit-ok looks ok for now
   function _getRemainingSlashCapacity(
     SlasherConfig memory slasherConfig,
     address slasher
@@ -389,6 +428,7 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
   // StakingPoolBase
   // ===============
 
+  // @audit-ok checked
   /// @inheritdoc StakingPoolBase
   function _validateOnTokenTransfer(address, address staker, bytes calldata) internal view override {
     // check if staker is an operator
@@ -397,6 +437,7 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
 
   /// @inheritdoc StakingPoolBase
   /// @dev The access control is done in StakingPoolBase.
+  // @audit-ok seems ok for now
   function setPoolConfig(
     uint256 maxPoolSize,
     uint256 maxPrincipalPerStaker
@@ -411,6 +452,7 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
   }
 
   /// @inheritdoc StakingPoolBase
+  // @audit-ok seems ok for now
   function _handleOpen() internal view override(StakingPoolBase) {
     if (s_numOperators < i_minInitialOperatorCount) {
       revert InadequateInitialOperatorCount(s_numOperators, i_minInitialOperatorCount);
@@ -423,6 +465,9 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
   /// @dev Previously removed operators cannot be readded to the pool.
   /// @dev precondition The caller must have the default admin role.
   /// @param operators The sorted list of operator addresses
+
+  // @audit Confirmed - Zero address can be passed as operator
+  // @audit known - bonding array issue
   function addOperators(address[] calldata operators)
     external
     validateRewardVaultSet
@@ -470,6 +515,7 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
   /// @dev precondition The caller must have the default admin role.
   /// @dev precondition The pool must be open.
   /// @dev precondition The operators must be currently added operators.
+  // @audit-ok seems ok for now
   function removeOperators(address[] calldata operators)
     external
     onlyRole(DEFAULT_ADMIN_ROLE)
@@ -535,6 +581,9 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
   /// @dev precondition The caller must be in the claim period or the pool must be closed or paused.
   /// @dev precondition The caller must be a removed operator with some removed
   /// staked LINK amount.
+
+  // @audit-ok checked
+  // @audit what about the rewards though
   function unstakeRemovedPrincipal() external {
     if (!_canUnstake(s_stakers[msg.sender])) {
       revert StakerNotInClaimPeriod(msg.sender);
