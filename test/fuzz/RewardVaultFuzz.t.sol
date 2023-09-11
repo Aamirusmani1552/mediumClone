@@ -169,7 +169,7 @@ contract RewardVaultFuzzTests is BaseTest {
     assertEq(claimed, operatorRewards);
   }
 
-  function tes_Not_RemovedOperatorCannotClaimRewards() public {
+  function test_Not_RemovedOperatorCannotClaimRewards() public {
     uint256 reward = 100 ether;
     uint256 communityStakeAmount = 100 ether;
 

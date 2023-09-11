@@ -76,117 +76,156 @@ contract MyIntergrationTests is BaseTestTimelocked {
     assertEq(unboundingTimeAfterCall2, newUnbondingTime);
   }
 
-  // @audit test not going to work as the executor will be the one who will give access to the
-  // satking pool not the timelock. It's a valid
-  function test_MigrationProxyCanRecieveTheAlerterFundButTheirIsNotAWayToWithdrawThem() public {
+  // @audit There is only one way to deposit the rewards in the operator staking pool for alerters
+  // if we
+  // use the timelock system. So for approving and depositing the rewards we need to use the
+  // timelock with
+  // atleast min delay that is set inside StakingTimelock contract. So this test will always fail
+  // because
+  // are sending delay to 0
+  function testFail_thereIsNoWayToDepositAndWithdrawAlerterRewardsWithoutDelay() public {
+    uint256 delay = 0;
+    _depositRewards(delay);
+  }
+
+  // @audit this function is exactly same as the above function but with delay of 31 days
+  function test_depositAlerterRewardsWillWorkWithDelay() public {
+    uint256 delay = 31 days;
+    _depositRewards(delay);
+  }
+
+  // @audit this function showcase the vulnerability when withdraw is called with delay
+  function test_withdrawAlerterRewardsWillNotWorkWithDelay() public {
+    uint256 delay = 31 days;
+    uint32 normalPriorityPeriodThreshold = 2 hours + 40 minutes;
+    uint32 normalRegularPeriodThreshold = 3 hours;
+
+    changePrank(address(this));
+
+    // deploying new price feeds and alerts controller
+    (PriceFeedAlertsController priceAlerterController, MockV3Aggregator priceFeed1) =
+    _deployNewPriceFeedAlertsController(normalPriorityPeriodThreshold, normalRegularPeriodThreshold);
+
+    // creating slasher config
+    ISlashable.SlasherConfig memory slasherConfig =
+      ISlashable.SlasherConfig({refillRate: 1 ether, slashCapacity: 1000 ether});
+
+    // giving slasher role to the price Feed controller
+    _addPriceFeedControllerToStakingPoolAsSlasher(priceAlerterController, slasherConfig);
+
+    // deposits 1000 link tokens to the operator staking pool
+    _depositRewards(delay);
+
+    // balance after depositiing rewards
+    uint256 aleterRewardsAfterDeposit = s_operatorStakingPool.getAlerterRewardFunds();
+
+    // making calls to the close and withdraw function with delay
+    changePrank(PROPOSER_ONE);
+    Timelock.Call[] memory callsToCloseAndWithdrawAlerterRewards = new Timelock.Call[](2);
+    // closing the operatorStakingPool so that alerter rewards can be withdrawn
+    changePrank(PROPOSER_ONE);
+    callsToCloseAndWithdrawAlerterRewards[0] = Timelock.Call({
+      target: address(s_operatorStakingPool),
+      value: 0,
+      data: abi.encodeWithSelector(s_operatorStakingPool.close.selector)
+    });
+
+    callsToCloseAndWithdrawAlerterRewards[1] = Timelock.Call({
+      target: address(s_operatorStakingPool),
+      value: 0,
+      data: abi.encodeWithSelector(
+        s_operatorStakingPool.withdrawAlerterReward.selector, aleterRewardsAfterDeposit
+        )
+    });
+
+    // scheduling the call
+    s_stakingTimelock.scheduleBatch(
+      callsToCloseAndWithdrawAlerterRewards, NO_PREDECESSOR, EMPTY_SALT, delay
+    );
+
+    // refreshing the price feeds
+    _updateAnswer(priceFeed1);
+
+    // let's assume an alerter made call to the pool to raise the alert because of stale price
+    // skipping upto normalPriorityPeriodThreshold to make the price stale
+    skip(normalPriorityPeriodThreshold);
+
+    // operator raises an alert
+    changePrank(OPERATOR_STAKER_ONE);
+    priceAlerterController.raiseAlert(address(priceFeed1));
+
+    // now this is what going to happen, each operators will be slashed 10 Link token for
+    // not updating the feeds and the alerter will be rewarded 100 link tokens for raising the
+    // alert.
+    // That means for each alert, the slashed amount will be added to the alerter rewards and
+    // the alerter rewards will be transferred to the alerter.
+    uint256 alerterRewardsAfterAlert = s_operatorStakingPool.getAlerterRewardFunds();
+    assert(alerterRewardsAfterAlert < aleterRewardsAfterDeposit);
+    console.log('alerter rewards after alert are %s', alerterRewardsAfterAlert);
+    console.log('alerter rewards before alert are %s', aleterRewardsAfterDeposit);
+
+    // skipping 31 days to execute the call for withdraw of the alerter rewards
+    skip(delay);
+    changePrank(EXECUTOR_ONE);
+    vm.expectRevert();
+    s_stakingTimelock.executeBatch(
+      callsToCloseAndWithdrawAlerterRewards, NO_PREDECESSOR, EMPTY_SALT
+    );
+  }
+
+  function _depositRewards(uint256 delay) internal returns (uint256) {
     changePrank(REWARDER);
-    uint256 alerterReward = 1000 ether;
+    uint256 alerterReward = 100 ether;
+    // transferring some tokens to s_stakingTimelock so that it can deposit tokens
     s_LINK.transfer(address(s_stakingTimelock), alerterReward);
 
-    uint256 balanceBefore = s_LINK.balanceOf(address(s_stakingTimelock));
-    assertEq(balanceBefore, alerterReward);
-
-    // proposer proposes to transfer the amounts to operator staking pool
+    // proposer proposes to approve the transfer of the amounts to operator staking pool by
+    // staking timelock
     changePrank(PROPOSER_ONE);
-    Timelock.Call[] memory calls = new Timelock.Call[](2);
+    Timelock.Call[] memory calls = new Timelock.Call[](1);
 
     calls[0] = Timelock.Call({
-      target: address(s_operatorStakingPool),
+      target: address(s_LINK),
       value: 0,
       data: abi.encodeWithSelector(
         s_LINK.approve.selector, address(s_operatorStakingPool), alerterReward
         )
     });
 
-    calls[1] = Timelock.Call({
+    // the contract must have atleat this much balance
+    uint256 balanceOfStakingTimelock = s_LINK.balanceOf(address(s_stakingTimelock));
+    assert(balanceOfStakingTimelock >= alerterReward);
+
+    // scheduling and execting the approve transaction. Though the approval and transfer of the
+    // funds
+    // can be done at the same time. This is just to demonstrate the test
+    _scheduleAndExecuteTheCall(calls, delay);
+
+    // checking if the allownace has be successfull or not
+    uint256 allowed = s_LINK.allowance(address(s_stakingTimelock), address(s_operatorStakingPool));
+    assertEq(allowed, alerterReward);
+
+    // alerter rewards before in the pool
+    uint256 alerterRewardsBefore = s_operatorStakingPool.getAlerterRewardFunds();
+
+    // scheduling call for depositing Alerter Rewards
+    calls[0] = Timelock.Call({
       target: address(s_operatorStakingPool),
       value: 0,
       data: abi.encodeWithSelector(s_operatorStakingPool.depositAlerterReward.selector, alerterReward)
     });
 
-    changePrank(PROPOSER_ONE);
-    s_stakingTimelock.scheduleBatch(calls, NO_PREDECESSOR, EMPTY_SALT, MIN_DELAY);
+    // executing the call
+    _scheduleAndExecuteTheCall(calls, delay);
 
-    skip(MIN_DELAY);
+    // checking if the alerter's increased balance is equal to deposited rewards
+    uint256 alerterRewardAfter = s_operatorStakingPool.getAlerterRewardFunds();
+    assertEq(alerterRewardAfter - alerterRewardsBefore, alerterReward);
 
-    changePrank(EXECUTOR_ONE);
-    s_stakingTimelock.executeBatch(calls, NO_PREDECESSOR, EMPTY_SALT);
-
-    uint256 balanceAfter = s_LINK.balanceOf(address(s_stakingTimelock));
-    assertEq(balanceAfter, 0);
-    assertEq(s_operatorStakingPool.getAlerterRewardFunds(), alerterReward);
-  }
-
-  function test_TheTimeLockSystemDoesnotWorkAsExpectedMigraionProxyCanBeChanged() public {
-    // first proposer proposes to change the unbonding time to 30 days
-    changePrank(PROPOSER_ONE);
-    Timelock.Call[] memory firstCalls = new Timelock.Call[](1);
-    MigrationProxy newMigrationProxyAddress = new MigrationProxy(
-      MigrationProxy.ConstructorParams({
-        LINKAddress: s_LINK,
-        v01StakingAddress: MOCK_STAKING_V01,
-        operatorStakingPool: s_operatorStakingPool,
-        communityStakingPool: s_communityStakingPool,
-        adminRoleTransferDelay: ADMIN_ROLE_TRANSFER_DELAY
-      })
-    );
-
-    uint256 delay = 31 days;
-
-    // setting 30 days as the new unbonding time for the staking pool
-    firstCalls[0] = Timelock.Call({
-      target: address(s_communityStakingPool),
-      value: 0,
-      data: abi.encodeWithSelector(
-        StakingPoolBase.setMigrationProxy.selector, address(newMigrationProxyAddress)
-        )
-    });
-
-    // scheduling the first call
-    s_stakingTimelock.scheduleBatch(firstCalls, NO_PREDECESSOR, EMPTY_SALT, delay);
-
-    // could be proposed on the same day. Only doing just for clarity
-    skip(1 hours);
-
-    // After one day proposer makes another call to change the unbonding time to 2 days
-    Timelock.Call[] memory secondCalls = new Timelock.Call[](1);
-    MigrationProxyAttack attackMigrationProxy = new MigrationProxyAttack(
-      MigrationProxyAttack.ConstructorParams({
-        LINKAddress: s_LINK,
-        v01StakingAddress: MOCK_STAKING_V01,
-        operatorStakingPool: s_operatorStakingPool,
-        communityStakingPool: s_communityStakingPool,
-        adminRoleTransferDelay: ADMIN_ROLE_TRANSFER_DELAY
-      })
-    );
-
-    secondCalls[0] = Timelock.Call({
-      target: address(s_communityStakingPool),
-      value: 0,
-      data: abi.encodeWithSelector(
-        StakingPoolBase.setMigrationProxy.selector, address(attackMigrationProxy)
-        )
-    });
-
-    // scheduling the second call
-    s_stakingTimelock.scheduleBatch(secondCalls, NO_PREDECESSOR, EMPTY_SALT, delay);
-
-    // skipping 30 days to execute the first call
-    skip(delay);
-    changePrank(EXECUTOR_ONE);
-    s_stakingTimelock.executeBatch(firstCalls, NO_PREDECESSOR, EMPTY_SALT);
-
-    // checking if the migration proxy is actually set to new migration proxy
-    address migrationProxy = s_communityStakingPool.getMigrationProxy();
-    assertEq(migrationProxy, address(newMigrationProxyAddress));
-
-    // skipping 2 days to execute the second call
-    skip(2 hours);
-    s_stakingTimelock.executeBatch(secondCalls, NO_PREDECESSOR, EMPTY_SALT);
-
-    // checking if the migration proxy is actually set to attack migration proxy
-    migrationProxy = s_communityStakingPool.getMigrationProxy();
-    assertEq(migrationProxy, address(attackMigrationProxy));
+    // the remaining allownace should be zero
+    allowed = s_LINK.allowance(address(s_stakingTimelock), address(s_operatorStakingPool));
+    assertEq(allowed, 0);
+    return alerterRewardAfter;
   }
 
   // @audit test passed
@@ -311,18 +350,8 @@ contract MyIntergrationTests is BaseTestTimelocked {
     ISlashable.SlasherConfig memory slasherConfig =
       ISlashable.SlasherConfig({refillRate: 1 ether, slashCapacity: 1000 ether});
 
-    // adding the slasher role to the operator staking pool
-    Timelock.Call[] memory calls = new Timelock.Call[](1);
-    calls[0] = Timelock.Call({
-      target: address(s_operatorStakingPool),
-      value: 0,
-      data: abi.encodeWithSelector(
-        s_operatorStakingPool.addSlasher.selector, address(priceAlerterController), slasherConfig
-        )
-    });
-
-    // scheduling and executing the answer
-    _scheduleAndExecuteTheCall(calls, delay);
+    // giving slasher role to the price Feed controller
+    _addPriceFeedControllerToStakingPoolAsSlasher(priceAlerterController, slasherConfig);
 
     // updating the answer
     (roundId, updatedAt) = _updateAnswer(priceFeed1);
@@ -357,7 +386,7 @@ contract MyIntergrationTests is BaseTestTimelocked {
     });
 
     // updating the feed config to max values
-    calls = new Timelock.Call[](1);
+    Timelock.Call[] memory calls = new Timelock.Call[](1);
     calls[0] = Timelock.Call({
       target: address(priceAlerterController),
       value: 0,
@@ -397,8 +426,8 @@ contract MyIntergrationTests is BaseTestTimelocked {
       feed: address(priceFeed1),
       priorityPeriodThreshold: normalPriorityPeriodThreshold,
       regularPeriodThreshold: normalRegularPeriodThreshold,
-      slashableAmount: 100 ether,
-      alerterRewardAmount: 10 ether,
+      slashableAmount: 10 ether,
+      alerterRewardAmount: 100 ether,
       slashableOperators: slashableOperators
     });
 
@@ -444,5 +473,24 @@ contract MyIntergrationTests is BaseTestTimelocked {
     // getting the updated data
     (uint80 roundId,,, uint256 updatedAt,) = priceFeed1.latestRoundData();
     return (roundId, updatedAt);
+  }
+
+  function _addPriceFeedControllerToStakingPoolAsSlasher(
+    PriceFeedAlertsController priceAlerterController,
+    ISlashable.SlasherConfig memory slasherConfig
+  ) internal {
+    uint256 delay = 31 days;
+    // adding the slasher role to the operator staking pool
+    Timelock.Call[] memory calls = new Timelock.Call[](1);
+    calls[0] = Timelock.Call({
+      target: address(s_operatorStakingPool),
+      value: 0,
+      data: abi.encodeWithSelector(
+        s_operatorStakingPool.addSlasher.selector, address(priceAlerterController), slasherConfig
+        )
+    });
+
+    // scheduling and executing the answer
+    _scheduleAndExecuteTheCall(calls, delay);
   }
 }

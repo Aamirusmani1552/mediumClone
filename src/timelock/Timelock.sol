@@ -139,6 +139,8 @@ contract Timelock is AccessControlEnumerable {
   /// (could be either pending/ready/done) vs an unregistered operation.
   uint256 private constant _DONE_TIMESTAMP = uint256(1);
 
+  // mapping(bytes4 => uint256) private activeSelectors;
+
   /// @notice The timestamp when an operation ID can be executed
   mapping(bytes32 => uint256) private s_timestamps;
 
@@ -295,7 +297,6 @@ contract Timelock is AccessControlEnumerable {
         largestDelay = selectorDelay;
       }
     }
-    console.log('largest delay for the calls is %s', largestDelay);
     return largestDelay;
   }
 
@@ -338,6 +339,7 @@ contract Timelock is AccessControlEnumerable {
     uint256 delay
   ) public virtual onlyRoleOrAdminRole(PROPOSER_ROLE) {
     bytes32 id = hashOperationBatch({calls: calls, predecessor: predecessor, salt: salt});
+    // _checkForActiveSelector(calls);
     _schedule({id: id, delay: delay, calls: calls});
     uint256 callsLength = calls.length;
     for (uint256 i; i < callsLength; ++i) {
@@ -346,6 +348,17 @@ contract Timelock is AccessControlEnumerable {
       );
     }
   }
+
+  // function _checkForActiveSelector(Call[] calldata calls) internal view {
+  //   uint256 callsLength = calls.length;
+  //   for (uint256 i; i < callsLength; ++i) {
+  //     bytes4 selector = bytes4(calls[i].data[:4]);
+
+  //     if (activeSelectors[selector] > 0) {
+  //       revert('Timelock: selector already active');
+  //     }
+  //   }
+  // }
 
   /**
    * @dev Schedule an operation that is to becomes valid after a given delay.
@@ -361,11 +374,19 @@ contract Timelock is AccessControlEnumerable {
   // not work as expected
   function _schedule(bytes32 id, uint256 delay, Call[] calldata calls) private {
     require(!isOperation(id), 'Timelock: operation already scheduled');
-    console.log(delay, getMinDelay(calls));
     require(delay >= getMinDelay(calls), 'Timelock: insufficient delay');
 
+    // _updateActiveSelectors(delay, calls);
     s_timestamps[id] = block.timestamp + delay;
   }
+
+  // function _updateActiveSelectors(uint256 delay, Call[] calldata calls) internal {
+  //   uint256 callsLength = calls.length;
+  //   for (uint256 i; i < callsLength; ++i) {
+  //     bytes4 selector = bytes4(calls[i].data[:4]);
+  //     activeSelectors[selector] = block.timestamp + delay;
+  //   }
+  // }
 
   /**
    * @dev Cancel an operation.
