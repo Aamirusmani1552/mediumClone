@@ -232,7 +232,7 @@ add the proper natspace
 
 ---
 
-## [L-3] An EOA can be added as a slasher
+## [L-3] An EOA can be added as a slasher<a id="low4"></a>
 
 According to the docs, a slasher should be `PriceFeedAlertController` or some other controller contract that will be added in the future. But `OperatorStakingPool::addSlasher()` function doesn't check that and can let EOA to be set as a slasher. Then he can call `slashAndReward()` by passing his address as an alerter to receive the funds.
 
@@ -242,7 +242,7 @@ Ofcourse the `OperatorStaking::addSlasher()` will be called by the `StakingTimel
 
 #### Mitigation
 
-Try adding a function that checks the code size of the address like one given below. or try using an external library that checks that.<a id="low4"></a>
+Try adding a function that checks the code size of the address like one given below. or try using an external library that checks that.
 
 ```Javascript
     function isEOA(address _address) public view returns (bool) {
