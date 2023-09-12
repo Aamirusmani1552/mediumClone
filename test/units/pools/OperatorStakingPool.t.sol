@@ -3741,10 +3741,13 @@ contract MyOSPTests is BaseTest {
     assertEq(s_operatorStakingPool.isOperator(address(0)), true);
   }
 
-  // function test_anyoneCanSetThemselvesAsPauserRole() public {
-  //   bytes32 PAUSER_ROLE = keccak256('PAUSER_ROLE');
-  //   // staker taking the pauser role
-  //   // changePrank(OPERATOR_STAKER_ONE);
-  //   s_operatorStakingPool.grantRole(PAUSER_ROLE, address(COMMUNITY_STAKER_ONE));
-  // }
+  // @audit test-passed
+  function test_AnEOACanBeAddedAsASlasher() public {
+    address slasher = OPERATOR_STAKER_ONE;
+
+    ISlashable.SlasherConfig memory config =
+      ISlashable.SlasherConfig({refillRate: 1 ether, slashCapacity: 1000 ether});
+
+    s_operatorStakingPool.addSlasher(slasher, config);
+  }
 }

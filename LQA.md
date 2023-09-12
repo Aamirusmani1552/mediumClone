@@ -4,7 +4,8 @@
 | -------------- | ------------------------------------------------------------------------------------------- | --------- |
 | [[L-0](#low1)] | No Address zero Checks done in `OperatorStakingPool:addOperators()`                         | 1         |
 | [[L-1](#low2)] | Solidity best practice not followed for errors                                              | 49        |
-| [[L-3](#low3)] | No info on how to use `Migratable::_validateMigrationTarget()` with Access control is given | 1         |
+| [[L-2](#low3)] | No info on how to use `Migratable::_validateMigrationTarget()` with Access control is given | 1         |
+| [[L-3](#low4)] | An EOA can be added as a slasher                                                            | 1         |
 
 ## Low Risk Issues
 
@@ -228,3 +229,42 @@ File: IMigratable.sol
 #### Mitigation
 
 add the proper natspace
+
+---
+
+## [L-3] An EOA can be added as a slasher
+
+According to the docs, a slasher should be `PriceFeedAlertController` or some other controller contract that will be added in the future. But `OperatorStakingPool::addSlasher()` function doesn't check that and can let EOA to be set as a slasher. Then he can call `slashAndReward()` by passing his address as an alerter to receive the funds.
+
+Here is a test that proves that an EOA can be a slasher: [[Test](Link)]
+
+Ofcourse the `OperatorStaking::addSlasher()` will be called by the `StakingTimelock` contract with a delay. That means stakers will have enought time to withdraw all of their funds. But Going to this extreem length would not be a good idea. Instead try adding a check that checks if the `address.code.length` is greater that zero or not. This check would not let an EOA to be a slasher atleast.
+
+#### Mitigation
+
+Try adding a function that checks the code size of the address like one given below. or try using an external library that checks that.<a id="low4"></a>
+
+```Javascript
+    function isEOA(address _address) public view returns (bool) {
+        uint size;
+        assembly {
+            size := extcodesize(_address)
+        }
+        return size == 0;
+    }
+```
+
+Then add this check:
+
+```diff
+    function addSlasher(
+    address slasher,
+    SlasherConfig calldata config
+  ) external override onlyRole(DEFAULT_ADMIN_ROLE) {
++   if(isEOA(slasher)){
++      revert();
++    }
+    _grantRole(SLASHER_ROLE, slasher);
+    _setSlasherConfig(slasher, config);
+  }
+```
