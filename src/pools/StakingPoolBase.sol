@@ -489,7 +489,8 @@ abstract contract StakingPoolBase is
   /// provide stakers sufficient time to withdraw their staked LINK from the
   /// pool before a malicious reward vault is set.
 
-  // @audit should accept timelock of the Timelock as it could be set to less than the unbonding period
+  // @audit should accept timelock of the Timelock as it could be set to less than the unbonding
+  // period
   function unstake(uint256 amount, bool shouldClaimReward) external override {
     Staker storage staker = s_stakers[msg.sender];
     if (!_canUnstake(staker)) {

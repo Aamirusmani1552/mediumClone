@@ -46,7 +46,6 @@ contract CommunityStakingPool is StakingPoolBase, IMerkleAccessController, TypeA
   /// of staker addresses with early acccess.
   bytes32 private s_merkleRoot;
 
-  // @audit operatorStakingPool can be set to an attackContract
   constructor(ConstructorParams memory params) StakingPoolBase(params.baseParams) {
     if (address(params.operatorStakingPool) == address(0)) {
       revert InvalidZeroAddress();
@@ -143,7 +142,6 @@ contract CommunityStakingPool is StakingPoolBase, IMerkleAccessController, TypeA
   /// @param newOperatorStakingPool The new operator staking pool
   /// @dev precondition The caller must have the default admin role.
 
-  // @audit old OperatorStakingPool can be set again
   function setOperatorStakingPool(OperatorStakingPool newOperatorStakingPool)
     external
     onlyRole(DEFAULT_ADMIN_ROLE)

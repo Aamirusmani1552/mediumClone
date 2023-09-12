@@ -526,4 +526,68 @@ contract MyIntergrationTests is BaseTestTimelocked {
     // scheduling and executing the answer
     _scheduleAndExecuteTheCall(calls, delay);
   }
+
+  function test_contractManagerHasToGoThroughDelayToPauseTheRewardVaultOrAnyPausableContract()
+    public
+  {
+
+
+    bytes32 PAUSER_ROLE = keccak256('PAUSER_ROLE');
+    // s_operatorStakingPool.grantRole(PAUSER_ROLE, address(s_stakingTimelock));
+
+    // creating call to grantRole of the Pauser to staking timelock
+    Timelock.Call[] memory calls = new Timelock.Call[](1);
+    calls[0] = Timelock.Call({
+      target: address(s_operatorStakingPool),
+      value: 0,
+      data: abi.encodeWithSelector(
+        s_operatorStakingPool.grantRole.selector, PAUSER_ROLE, address(s_stakingTimelock)
+        )
+    });
+
+    _scheduleAndExecuteTheCall(calls, MIN_DELAY);
+
+    // creating call to pause the reward vault
+     calls = new Timelock.Call[](1);
+    calls[0] = Timelock.Call({
+      target: address(s_operatorStakingPool),
+      value: 0,
+      data: abi.encodeWithSelector(s_operatorStakingPool.emergencyPause.selector)
+    });
+
+    // scheduling and executing the call
+    _scheduleAndExecuteTheCall(calls, MIN_DELAY);
+  }
+
+    function testFail_contractManagerCannotPauseTheContractWithoutDelay()
+    public
+  {
+
+
+    bytes32 PAUSER_ROLE = keccak256('PAUSER_ROLE');
+    // s_operatorStakingPool.grantRole(PAUSER_ROLE, address(s_stakingTimelock));
+
+    // creating call to grantRole of the Pauser to staking timelock
+    Timelock.Call[] memory calls = new Timelock.Call[](1);
+    calls[0] = Timelock.Call({
+      target: address(s_operatorStakingPool),
+      value: 0,
+      data: abi.encodeWithSelector(
+        s_operatorStakingPool.grantRole.selector, PAUSER_ROLE, address(s_stakingTimelock)
+        )
+    });
+
+    _scheduleAndExecuteTheCall(calls, MIN_DELAY);
+
+    // creating call to pause the reward vault
+     calls = new Timelock.Call[](1);
+    calls[0] = Timelock.Call({
+      target: address(s_operatorStakingPool),
+      value: 0,
+      data: abi.encodeWithSelector(s_operatorStakingPool.emergencyPause.selector)
+    });
+
+    // scheduling and executing the call without delay should revert
+    _scheduleAndExecuteTheCall(calls, 0);
+  }
 }

@@ -3750,4 +3750,11 @@ contract MyOSPTests is BaseTest {
 
     s_operatorStakingPool.addSlasher(slasher, config);
   }
+
+  function test_anyoneCanTakeAPauserRole() public {
+    bytes32 PAUSER_ROLE = keccak256('PAUSER_ROLE');
+    // changePrank(OPERATOR_STAKER_ONE);
+
+    s_operatorStakingPool.grantRole(PAUSER_ROLE, OPERATOR_STAKER_ONE);
+  }
 }

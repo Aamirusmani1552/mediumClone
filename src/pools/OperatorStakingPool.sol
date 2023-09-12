@@ -207,7 +207,6 @@ contract OperatorStakingPool is ISlashable, StakingPoolBase, TypeAndVersionInter
   /// @param role The role to grant
   /// @param account The address to grant the role to
 
-  // @audit can be assigned to zero address
   function grantRole(
     bytes32 role,
     address account
