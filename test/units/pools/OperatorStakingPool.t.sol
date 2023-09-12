@@ -3728,7 +3728,7 @@ contract OperatorStakingPool_isActive is StakingPool_WithStakers {
 }
 
 contract MyOSPTests is BaseTest {
-  // @audit-ok Test passed
+  // @audit Test passed
   function test_AddressZeroCanBeAddedAsOperator() public {
     address operator1 = address(1);
 
@@ -3741,10 +3741,10 @@ contract MyOSPTests is BaseTest {
     assertEq(s_operatorStakingPool.isOperator(address(0)), true);
   }
 
-  function test_anyoneCanSetThemselvesAsPauserRole() public {
-    bytes32 PAUSER_ROLE = keccak256('PAUSER_ROLE');
-    // staker taking the pauser role
-    // changePrank(OPERATOR_STAKER_ONE);
-    s_operatorStakingPool.grantRole(PAUSER_ROLE, address(COMMUNITY_STAKER_ONE));
-  }
+  // function test_anyoneCanSetThemselvesAsPauserRole() public {
+  //   bytes32 PAUSER_ROLE = keccak256('PAUSER_ROLE');
+  //   // staker taking the pauser role
+  //   // changePrank(OPERATOR_STAKER_ONE);
+  //   s_operatorStakingPool.grantRole(PAUSER_ROLE, address(COMMUNITY_STAKER_ONE));
+  // }
 }

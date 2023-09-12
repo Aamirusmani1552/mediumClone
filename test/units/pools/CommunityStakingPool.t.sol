@@ -2790,61 +2790,7 @@ contract CommunityStakingPool_MyTests is StakingPool_WithStakers {
     changePrank(OWNER);
   }
 
-  function test_NewValuesForTheVariablesCanBeSetAgain() public {
-    CommunityStakingPool CSPool = new CommunityStakingPool(
-      CommunityStakingPool.ConstructorParams({
-        operatorStakingPool: s_operatorStakingPool,
-        baseParams: StakingPoolBase.ConstructorParamsBase({
-          LINKAddress: s_LINK,
-          initialMaxPoolSize: COMMUNITY_MAX_POOL_SIZE,
-          initialMaxPrincipalPerStaker: COMMUNITY_MAX_PRINCIPAL,
-          minPrincipalPerStaker: COMMUNITY_MIN_PRINCIPAL,
-          initialUnbondingPeriod: INITIAL_UNBONDING_PERIOD,
-          maxUnbondingPeriod: MAX_UNBONDING_PERIOD,
-          initialClaimPeriod: INITIAL_CLAIM_PERIOD,
-          minClaimPeriod: MIN_CLAIM_PERIOD,
-          maxClaimPeriod: MAX_CLAIM_PERIOD,
-          adminRoleTransferDelay: ADMIN_ROLE_TRANSFER_DELAY
-        })
-      })
-    );
-
-    CSPool.setOperatorStakingPool(s_operatorStakingPool);
-  }
-
-  function test_Check() public {
-    CommunityStakingPool CSPool = new CommunityStakingPool(
-      CommunityStakingPool.ConstructorParams({
-        operatorStakingPool: s_operatorStakingPool,
-        baseParams: StakingPoolBase.ConstructorParamsBase({
-          LINKAddress: s_LINK,
-          initialMaxPoolSize: COMMUNITY_MAX_POOL_SIZE,
-          initialMaxPrincipalPerStaker: COMMUNITY_MAX_PRINCIPAL,
-          minPrincipalPerStaker: COMMUNITY_MIN_PRINCIPAL,
-          initialUnbondingPeriod: INITIAL_UNBONDING_PERIOD,
-          maxUnbondingPeriod: MAX_UNBONDING_PERIOD,
-          initialClaimPeriod: INITIAL_CLAIM_PERIOD,
-          minClaimPeriod: MIN_CLAIM_PERIOD,
-          maxClaimPeriod: MAX_CLAIM_PERIOD,
-          adminRoleTransferDelay: ADMIN_ROLE_TRANSFER_DELAY
-        })
-      })
-    );
-
-    // set migrationProxy, ReawardVault and MerkleRoot, Before opening pool
-    CSPool.setMigrationProxy(address(s_migrationProxy));
-    CSPool.setRewardVault(s_rewardVault);
-    CSPool.setMerkleRoot(bytes32(MERKLE_ROOT));
-    CSPool.open();
-
-    // assuming the pool is public now
-    changePrank(OPERATOR_STAKER_ONE);
-    s_LINK.transferAndCall(address(CSPool), 10 * 10 ** 18, abi.encode(OPERATOR_STAKER_ONE));
-
-    CSPool.close();
-  }
-
-  // @audit passed the test
+  // @audit-info known behaviour
 
   function testFail_RemovedOperatorFromOpertorStakingPoolCannotStakeInCommunityStakingPool() public {
     OperatorStakingPool OSPool = new OperatorStakingPool(

@@ -81,7 +81,7 @@ contract MyIntergrationTests is BaseTestTimelocked {
   // use the timelock system. So for approving and depositing the rewards we need to use the
   // timelock with
   // atleast min delay that is set inside StakingTimelock contract. So this test will always fail
-  // because
+  // because we
   // are sending delay to 0
   function testFail_thereIsNoWayToDepositAndWithdrawAlerterRewardsWithoutDelay() public {
     uint256 delay = 0;

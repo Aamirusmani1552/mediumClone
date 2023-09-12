@@ -1,10 +1,10 @@
 Valid issues:
-1. address zero can be added as an operator even in the sorted list addresses
+Added: address zero can be added as an operator even in the sorted list addresses
 2. Natspac is missing at some places
-3. No address zero checks are done
-4. An operator staker that has been removed cannot claim rewards
+Added: No address zero checks are done
+Known Behaviour: An operator staker that has been removed cannot claim rewards
 5. the constructor arguments for different addresses can be duplicated
-6. the reward vault shout be closed before setting new one
-7. errors are not correctly defined
-8. migratable should have info for this _validateMigrationTarget
+6. the reward vault should be closed before setting new one
+Added: errors are not correctly defined
+Added: migratable should have info for this _validateMigrationTarget
 9. an EOA should not be set a slasher
